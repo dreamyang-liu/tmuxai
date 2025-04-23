@@ -16,9 +16,8 @@
 
 ## About The Project
 
-> TmuxAI executing user task: use vim, create docker compose file for nginx and mysql and start both
-
 ![Product Screenshot](https://tmuxai.dev/shots/vim-docker-compose.png)
+_use vim, create docker compose file for nginx and mysql and start both_
 
 TmuxAI is an intelligent terminal assistant that lives inside your tmux sessions. Unlike other CLI AI tools, TmuxAI observes and understands the content of your tmux panes, providing assistance without requiring you to change your workflow or interrupt your terminal sessions.
 
