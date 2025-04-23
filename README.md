@@ -1,9 +1,8 @@
 <br/>
 <div align="center">
 <a href="https://github.com/alvinunreal/tmuxai">
-<img src="https://tmuxai.dev/logo2.svg" alt="TmuxAI Logo" width="80" height="80">
+<img src="https://tmuxai.dev/banner.svg" alt="TmuxAI Logo" width="100%" style="border-radius: 10px">
 </a>
-<h3 align="center">TmuxAI</h3>
 <p align="center">
 AI-Powered, Non-Intrusive Terminal Assistant
 <br/>
@@ -11,12 +10,8 @@ AI-Powered, Non-Intrusive Terminal Assistant
 <a href="https://tmuxai.dev/getting-started"><strong>Getting Started »</strong></a>
 <br/>
 <br/>
-<a href="https://tmuxai.dev/screenshots">Screenshots</a>
-<br/>
-<br/>
-<a href="https://github.com/alvinunreal/tmuxai/issues/new?labels=bug&template=bug_report.md">Report Bug</a>
-<br/>
-<br/>
+<a href="https://tmuxai.dev/screenshots">Screenshots |</a>
+<a href="https://github.com/alvinunreal/tmuxai/issues/new?labels=bug&template=bug_report.md">Report Bug |</a>
 <a href="https://github.com/alvinunreal/tmuxai/issues/new?labels=enhancement&template=feature_request.md">Request Feature</a>
 </p>
 </div>
@@ -25,9 +20,9 @@ AI-Powered, Non-Intrusive Terminal Assistant
 
 ![Product Screenshot](https://tmuxai.dev/shots/vim-docker-compose.png)
 
-TmuxAI is an intelligent terminal assistant that lives inside your tmux sessions. Unlike other CLI AI tools, TmuxAI directly observes and understands the content of your tmux panes in real-time, providing contextual assistance without requiring you to change your workflow or interrupt your terminal sessions.
+TmuxAI is an intelligent terminal assistant that lives inside your tmux sessions. Unlike other CLI AI tools, TmuxAI observes and understands the content of your tmux panes, providing assistance without requiring you to change your workflow or interrupt your terminal sessions.
 
-Think of TmuxAI as a _pair programmer_ that sits beside you, watching your terminal environment exactly as you see it. It can understand what you're working on across multiple panes, help solve problems, and execute commands on your behalf in a dedicated execution pane.
+Think of TmuxAI as a _pair programmer_ that sits beside you, watching your terminal environment exactly as you see it. It can understand what you're working on across multiple panes, help solve problems and execute commands on your behalf in a dedicated execution pane.
 
 ### Human-Inspired Interface
 
@@ -91,36 +86,74 @@ After installing TmuxAI, you need to configure your API key to start using it:
    ```
 
 3. **Default Configuration**
+
    By default, TmuxAI is configured to use the OpenRouter endpoint with the `google/gemini-2.5-flash-preview` model. You can customize these settings via the config.yaml file. For details, see the example configuration at [config.example.yaml](https://github.com/alvinunreal/tmuxai/blob/main/config.example.yaml).
 
 ## Usage
 
+When you first launch TmuxAI, you will be greeted with a chat interface. You can start using TmuxAI by typing commands in the chat interface.
+
+If you start TmuxAI outside a tmux session, it will create a new tmux session for you.
+
+### Understanding the TmuxAI Layout
+
+TmuxAI is designed to operate within a single tmux window, with one instance of
+TmuxAI running per window. It focuses exclusively on the panes within the
+current tmux window and does not access or interact with other tmux windows.
+
+TmuxAI organizes your workspace using the following pane structure:
+
+1. **Chat Pane**: This is where you interact with the AI. It features a REPL-like interface with syntax highlighting, auto-completion, and readline shortcuts.
+
+2. **Exec Pane**: TmuxAI selects (or creates) a pane where commands can be executed.
+
+3. **Read-Only Panes**: All other panes in the current window serve as additional context. TmuxAI can read their content but does not interact with them.
+
+### Modes
+
+TmuxAI operates by default in what's called "observe mode". Here's how the interaction flow works:
+
+1. **User types a message** in the Chat Pane.
+
+2. **TmuxAI captures context** from all visible panes in your current tmux window (excluding the Chat Pane itself). This includes:
+
+   - Current command with arguments
+   - Detected shell type
+   - User's operating system
+   - Current content of each pane
+
+3. **TmuxAI processes your request** by sending user's message, the current pane context, and chat history to the AI.
+
+4. **The AI responds** with information, which may include a suggested command to run.
+
+5. **If a command is suggested**, TmuxAI will:
+
+   - Check if the command matches whitelist or blacklist patterns
+   - Ask for your confirmation (unless the command is whitelisted)
+   - Execute the command in the designated Exec Pane if approved
+   - Wait for the `wait_interval` (default: 5 seconds)
+   - Capture the new output from all panes
+   - Send the updated context back to the AI to continue helping you
+
+6. **The conversation continues** until your task is complete.
+
 ### Basic Commands
 
-- `/watch <description>`: Start watch mode with a description.
-- `/prepare`: Prepare the pane for TmuxAI automation.
+- `/info`: Display system information.
+- `/squash`: Summarize the chat history.
 - `/clear`: Clear the chat history.
 - `/reset`: Reset the chat history and tmux panes.
 - `/exit`: Exit the application.
 
-### Watch Mode
+### Other Modes
 
-- `/watch off` or `/w off`: Disable watch mode.
-
-### Exec Mode
-
-- `/exec`: Start exec mode to run commands in the execution pane.
-- `/exec off`: Exit exec mode.
+- `/watch <description>`: Start watch mode with a description.
+- `/prepare`: Start prepare mode
 
 ### Configuration
 
 - `/config`: View current configuration.
 - `/config set <key> <value>`: Set a configuration value.
-
-### Other Commands
-
-- `/info`: Display system information.
-- `/squash`: Summarize the chat history.
 
 ## Contributing
 
@@ -132,7 +165,3 @@ Don't forget to give the project a star! Thanks again!
 ## License
 
 Distributed under the Apache License. See [Apache License](https://github.com/alvinunreal/tmuxai/blob/main/LICENSE) for more information.
-
-## Contact
-
-Alvin Unreal - [@alvinunreal](https://twitter.com/alvinunreal) - alvin@tmuxai.dev
