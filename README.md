@@ -3,9 +3,10 @@
 <a href="https://github.com/alvinunreal/tmuxai">
 <img src="https://tmuxai.dev/banner.svg" alt="TmuxAI Logo" width="100%" style="border-radius: 10px">
 </a>
-<p align="center">
-AI-Powered, Non-Intrusive Terminal Assistant
 <br/>
+<h3 align="center">
+AI-Powered, Non-Intrusive Terminal Assistant
+</h3>
 <br/>
 <a href="https://tmuxai.dev/getting-started"><strong>Getting Started »</strong></a>
 <br/>
@@ -85,23 +86,10 @@ After installing TmuxAI, you need to configure your API key to start using it:
    tmuxai
    ```
 
-3. **Default Configuration**
-
-   By default, TmuxAI is configured to use the OpenRouter endpoint with the `google/gemini-2.5-flash-preview` model. You can customize these settings via the config.yaml file. For details, see the example configuration at [config.example.yaml](https://github.com/alvinunreal/tmuxai/blob/main/config.example.yaml).
-
-## Usage
-
-When you first launch TmuxAI, you will be greeted with a chat interface. You can start using TmuxAI by typing commands in the chat interface.
-
-If you start TmuxAI outside a tmux session, it will create a new tmux session for you.
-
-### Understanding the TmuxAI Layout
+## TmuxAI Layout
 
 TmuxAI is designed to operate within a single tmux window, with one instance of
-TmuxAI running per window. It focuses exclusively on the panes within the
-current tmux window and does not access or interact with other tmux windows.
-
-TmuxAI organizes your workspace using the following pane structure:
+TmuxAI running per window and organizes your workspace using the following pane structure:
 
 1. **Chat Pane**: This is where you interact with the AI. It features a REPL-like interface with syntax highlighting, auto-completion, and readline shortcuts.
 
@@ -109,7 +97,7 @@ TmuxAI organizes your workspace using the following pane structure:
 
 3. **Read-Only Panes**: All other panes in the current window serve as additional context. TmuxAI can read their content but does not interact with them.
 
-### Modes
+## Observe Mode
 
 TmuxAI operates by default in what's called "observe mode". Here's how the interaction flow works:
 
@@ -137,23 +125,127 @@ TmuxAI operates by default in what's called "observe mode". Here's how the inter
 
 6. **The conversation continues** until your task is complete.
 
-### Basic Commands
+## Prepare Mode
 
-- `/info`: Display system information.
-- `/squash`: Summarize the chat history.
-- `/clear`: Clear the chat history.
-- `/reset`: Reset the chat history and tmux panes.
-- `/exit`: Exit the application.
+Prepare mode improves TmuxAI's ability to work with your terminal by customizing
+your shell prompt and tracking command execution with better precision. This
+enhancement eliminates the need for arbitrary wait intervals and provides the AI
+with more detailed information about your commands and their results.
 
-### Other Modes
+When you enable Prepare Mode, TmuxAI will:
 
-- `/watch <description>`: Start watch mode with a description.
-- `/prepare`: Start prepare mode
+1. **Detects your current shell** in the execution pane (supports bash, zsh, and fish)
+2. **Customizes your shell prompt** to include special markers that TmuxAI can recognize
+3. **Will track command execution history** including exit codes, and per-command outputs
+4. **Will detect command completion** instead of using fixed wait time intervals
 
-### Configuration
+To activate Prepare Mode, simply use:
 
-- `/config`: View current configuration.
-- `/config set <key> <value>`: Set a configuration value.
+```
+TmuxAI » /prepare
+```
+
+**Prepared Fish Example:**
+
+```shell
+$ function fish_prompt; set -l s $status; printf '%s@%s:%s[%s][%d]» ' $USER (hostname -s) (prompt_pwd) (date +"%H:%M") $s; end
+username@hostname:~/r/tmuxai[21:05][0]»
+```
+
+## Watch Mode
+
+Watch Mode transforms TmuxAI into a proactive assistant that continuously
+monitors your terminal activity and provides suggestions based on what you're
+doing.
+
+### Activating Watch Mode
+
+To enable Watch Mode, use the `/watch` command followed by a description of what you want TmuxAI to look for:
+
+```
+TmuxAI » /watch spot and suggest more efficient alternatives to my shell commands
+```
+
+When activated, TmuxAI will:
+
+1. Start capturing the content of all panes in your current tmux window at regular intervals (`wait_interval` configuration)
+2. Analyze content based on your specified watch goal and provide suggestions when appropriate
+
+### Example Use Cases
+
+Watch Mode is could be valuable for scenarios such as:
+
+- **Learning shell efficiency**: Get suggestions for more concise commands as you work
+
+  ```
+  TmuxAI » /watch suggest more efficient alternatives to my shell commands
+  ```
+
+- **Detecting common errors**: Receive warnings about potential issues or mistakes
+
+  ```
+  TmuxAI » /watch flag commands that could expose sensitive data or weaken system security
+  ```
+
+- **Log Monitoring and Error Detection**: Have TmuxAI monitor log files or terminal output for errors
+
+  ```
+  TmuxAI » /watch monitor log output for errors, warnings, or critical issues and suggest fixes
+  ```
+
+## Squashing
+
+As you work with TmuxAI, your conversation history grows, adding to the context
+provided to the AI model with each interaction. Different AI models have
+different context size limits and pricing structures based on token usage. To
+manage this, TmuxAI implements a simple context management feature called
+"squashing."
+
+### What is Squashing?
+
+Squashing is TmuxAI's built-in mechanism for summarizing chat history to manage
+token usage.
+
+In simple terms, when your context grows too large, TmuxAI condenses previous
+messages into a more compact summary.
+
+You can check your current context utilization at any time using the `/info` command:
+
+```bash
+TmuxAI » /info
+
+Context
+────────
+
+Messages            15
+Context Size~       16500 tokens
+                    ████████░░ 82.5%
+Max Size            20000 tokens
+```
+
+This example shows that the context is at 82.5% capacity (16,500 tokens out of 20,000). When the context size reaches 80% of the configured maximum (`max_context_size` in your config), TmuxAI automatically triggers squashing.
+
+### Manual Squashing
+
+If you'd like to manage your context before reaching the automatic threshold, you can trigger squashing manually with the `/squash` command:
+
+```bash
+TmuxAI » /squash
+```
+
+## Core Commands
+
+| Command                     | Description                                                      |
+| --------------------------- | ---------------------------------------------------------------- |
+| `/info`                     | Display system information, pane details, and context statistics |
+| `/clear`                    | Clear chat history.                                              |
+| `/reset`                    | Clear chat history and reset all panes.                          |
+| `/config`                   | View current configuration settings                              |
+| `/config set <key> <value>` | Override configuration for current session                       |
+| `/squash`                   | Manually trigger context summarization                           |
+| `/prepare`                  | Initialize Prepared Mode for the Exec Pane                       |
+| `/watch <description>`      | Enable Watch Mode with specified goal                            |
+| `/exit`                     | Exit TmuxAI                                                      |
 
 ## Contributing
 
