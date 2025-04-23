@@ -4,9 +4,6 @@
 <img src="https://tmuxai.dev/gh.svg" alt="TmuxAI Logo" width="100%" style="border-radius: 10px">
 </a>
 <br/>
-<h3 align="center">
-AI-Powered, Non-Intrusive Terminal Assistant
-</h3>
 <br/>
 <a href="https://tmuxai.dev/getting-started"><strong>Getting Started »</strong></a>
 <br/>
@@ -18,6 +15,8 @@ AI-Powered, Non-Intrusive Terminal Assistant
 </div>
 
 ## About The Project
+
+> TmuxAI executing user task: use vim, create docker compose file for nginx and mysql and start both
 
 ![Product Screenshot](https://tmuxai.dev/shots/vim-docker-compose.png)
 
