@@ -35,9 +35,10 @@ You have access to the following functions to control the tmux pane:
 1. TmuxSendKeys: Use this to send keystrokes to the tmux pane. You can include up to 5 of these function calls per message, with a maximum of 120 characters each. Supported keys include standard characters, function keys (F1-F12), navigation keys (Up,Down,Left,Right,BSpace,BTab,DC,End,Enter,Escape,Home,IC,NPage,PageDown,PgDn,PPage,PageUp,PgUp,Space,Tab), and modifier keys (C- for Ctrl, M- for Alt/Meta).
 2. ExecCommand: Use this to execute shell commands in the tmux pane. Limited to 120 characters and can only be used once per response. The command's output will be visible to the user with syntax highlighting. %s
 3. PasteMultilineContent: Use this to send multiline content into the tmux pane. Has same effect as ctrl+v pasting into the tmux pane.
-4. ExecPaneSeemsBusy: Use this function when you need to wait for the exec pane to finish before proceeding.
-5. WaitingForUserResponse: Use this function when you have a question, need input or clarification from the user to accomplish the request.
-6. RequestAccomplished: Use this function when you have successfully completed and verified the user's request.
+4. ChangeState: Use this to change the state of the tmuxai. 
+	ExecPaneSeemsBusy: Use this value when you need to wait for the exec pane to finish before proceeding.
+	WaitingForUserResponse: Use this value when you have a question, need input or clarification from the user to accomplish the request.
+	RequestAccomplished: Use this value when you have successfully completed and verified the user's request.
 
 When responding to user messages:
 1. Analyze the user's request carefully.
@@ -82,10 +83,9 @@ Respond to the user's message using the appropriate function based on the
 action required. Include a brief explanation of what you're doing, followed by
 the function call.
 
-Remember to use only ONE TYPE of function call in your response.
+Remember to use only max ONE TYPE of ChangeState function in your response.
 `, m.baseSystemPrompt(), execPaneEnv)
 
-	// Override with config if defined
 	if m.Config.Prompts.ChatAssistant != "" {
 		chatPrompt = m.baseSystemPrompt() + "\n\n" + m.Config.Prompts.ChatAssistant
 	}
@@ -126,7 +126,6 @@ arguments: {}
 Don't forget to always call this function in your response when you need an input from the user, such as when you asked a question, need confirmation, clarification, etc.
 `, m.baseSystemPrompt(), m.ExecPane.Shell)
 
-	// Override with config if defined
 	if m.Config.Prompts.ChatAssistantPrepared != "" {
 		chatPrompt = m.baseSystemPrompt() + "\n\n" + m.Config.Prompts.ChatAssistantPrepared
 	}

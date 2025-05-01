@@ -118,7 +118,7 @@ func (c *AiClient) ChatCompletion(messages []Message, model string) (string, err
 	reqBody := ChatCompletionRequest{
 		Model:      model,
 		Messages:   messages,
-		Tools:      tools, // Use the package-level 'tools' variable
+		Tools:      tools,
 		ToolChoice: "auto",
 	}
 

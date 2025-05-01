@@ -57,12 +57,6 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 		return false
 	}
 
-	// check for status change again
-	if m.Status == "" {
-		s.Stop()
-		return false
-	}
-
 	r, err := m.parseAIResponse(response)
 	if err != nil {
 		s.Stop()
@@ -143,6 +137,7 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 				m.Status = ""
 				return false // User cancelled
 			}
+		// Prepare mode only
 		case "execAndWait":
 			code, _ := system.HighlightCode("sh", step.Content)
 			fmt.Println(code)
@@ -201,7 +196,7 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 	}
 
 	if r.State == "WaitingForUserResponse" {
-		m.Status = "waiting"
+		m.Status = "question"
 		return false // Stop processing, wait for user input
 	}
 

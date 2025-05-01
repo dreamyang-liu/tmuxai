@@ -35,7 +35,7 @@ type CommandExecHistory struct {
 type Manager struct {
 	Config           *config.Config
 	AiClient         *AiClient
-	Status           string // running, waiting, done
+	Status           string // running, question, done
 	PaneId           string
 	ExecPane         *system.TmuxPaneDetails
 	Messages         []ChatMessage
@@ -121,7 +121,7 @@ func (m *Manager) GetPrompt() string {
 	switch m.Status {
 	case "running":
 		stateSymbol = "▶"
-	case "waiting":
+	case "question":
 		stateSymbol = "?"
 	case "done":
 		stateSymbol = "✓"
