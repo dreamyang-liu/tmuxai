@@ -13,12 +13,12 @@ import (
 )
 
 type AIResponse struct {
-	Message                string
-	SendKeys               []string
-	ExecCommand            []string
-	PasteMultilineContent  string
-	ExecAndWait            string
-	State                  string
+	Message               string
+	SendKeys              []string
+	ExecCommand           []string
+	PasteMultilineContent string
+	ExecAndWait           string
+	State                 string
 }
 
 // Parsed only when pane is prepared

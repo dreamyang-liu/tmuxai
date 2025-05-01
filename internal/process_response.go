@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+
+	"github.com/alvinunreal/tmuxai/logger"
 )
 
 func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
@@ -12,9 +14,13 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	cleanForMsg := clean
 
 	// Regular expression to find function calls in the AI response
-	functionPattern := `<(\w+)>(\{.*?\})</$1>`
+	// Original pattern used unsupported backreference $1.
+	// New pattern captures tag and content, matching general <tag>{content}</closing_tag> structure.
+	functionPattern := `<(\w+)>({.*?})</\w+>`
 	reFunctions := regexp.MustCompile(functionPattern)
 	functionMatches := reFunctions.FindAllStringSubmatch(clean, -1)
+
+	logger.Debug("Found %d function calls in response", len(functionMatches))
 
 	for _, match := range functionMatches {
 		if len(match) < 3 {
@@ -59,7 +65,7 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	}
 
 	// Clean up the message part by removing function calls
-	cleanPattern := `<(\w+)>(\{.*?\})</$1>`
+	cleanPattern := `<(\w+)>({.*?})</\w+>`
 	cleanRegex := regexp.MustCompile(cleanPattern)
 	cleanForMsg = cleanRegex.ReplaceAllString(cleanForMsg, "")
 	// Also remove any potential leading/trailing whitespace or newlines left after removal
@@ -68,24 +74,4 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	r.Message = cleanForMsg
 
 	return r, nil
-}
-
-// Helper: check if string is "1" or "true" (case-insensitive)
-func isTrue(s string) bool {
-	s = strings.TrimSpace(strings.ToLower(s))
-	return s == "1" || s == "true"
-}
-
-// Collapse multiple blank lines to a single newline
-func collapseBlankLines(s string) string {
-	return mustCompile(`\n{2,}`).ReplaceAllString(s, "\n")
-}
-
-// mustCompile is a helper for regexp.MustCompile
-func mustCompile(expr string) *regexp.Regexp {
-	re, err := regexp.Compile(expr)
-	if err != nil {
-		panic(err)
-	}
-	return re
 }

@@ -85,15 +85,6 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 		Timestamp: time.Now(),
 	}
 
-	// did AI follow our guidelines?
-	guidelineError, validResponse := m.aiFollowedGuidelines(r)
-	if !validResponse {
-		m.Println("AI didn't follow guidelines, trying again...")
-		m.Messages = append(m.Messages, currentMessage, responseMsg)
-		return m.ProcessUserMessage(guidelineError)
-
-	}
-
 	// colorize code blocks in the response
 	if r.Message != "" {
 		fmt.Println(system.Cosmetics(r.Message))
@@ -205,11 +196,11 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 
 	if r.State == "WaitingForUserResponse" {
 		m.Status = "waiting"
-		return true // Stop processing, wait for user input
+		return false // Stop processing, wait for user input
 	}
 
 	if r.State == "NoComment" {
-		// no comment, do nothing
+		return false
 	}
 
 	if !m.WatchMode {
@@ -240,40 +231,4 @@ func (m *Manager) startWatchMode(desc string) {
 	if m.WatchMode {
 		m.startWatchMode(desc)
 	}
-}
-
-func (m *Manager) aiFollowedGuidelines(r AIResponse) (string, bool) {
-	// Ensure only one type of action is present
-	numActions := 0
-	if len(r.SendKeys) > 0 { numActions++ }
-	if len(r.ExecCommand) > 0 { numActions++ }
-	if r.PasteMultilineContent != "" { numActions++ }
-	if r.ExecAndWait != "" { numActions++ }
-	if r.State == "RequestAccomplished" { numActions++ }
-	if r.State == "ExecPaneSeemsBusy" { numActions++ }
-	if r.State == "WaitingForUserResponse" { numActions++ }
-	if r.State == "NoComment" { numActions++ }
-
-	if numActions > 1 {
-		return "AI response contains multiple action types. Please provide only one action type.", false
-	}
-
-	// If there's a message, no action should be present
-	if r.Message != "" && numActions > 0 {
-		return "AI response contains both a message and an action. Please provide only one.", false
-	}
-
-	// If there's no message, exactly one action should be present
-	if r.Message == "" && numActions != 1 {
-		return "AI response must contain either a message or exactly one action.", false
-	}
-
-	// Validation specific to watch mode
-	if m.WatchMode {
-		if r.State != "NoComment" && len(r.ExecCommand) == 0 {
-			return "In watch mode, AI must either respond with NoComment or ExecCommand.", false
-		}
-	}
-
-	return "", true
 }
