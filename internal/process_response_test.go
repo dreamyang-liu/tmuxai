@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseAIResponse(t *testing.T) {
-	m := &Manager{} // parseAIResponse doesn't depend on manager state currently
+	m := &Manager{}
 
 	tests := []struct {
 		name           string
@@ -49,11 +49,33 @@ func TestParseAIResponse(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name:  "Single sendKeys action with markdown fences",
-			input: "```" + `\n<TmuxSendKeys>{"keys":"echo hello\n"}</TmuxSendKeys>\n` + "```",
+			name:  "Single sendKeys action with markdown fence",
+			input: "`" + `<TmuxSendKeys>{"keys":"echo hello\n"}</TmuxSendKeys>` + "`",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
 					{Type: "sendKeys", Content: "echo hello\n"},
+				},
+				State: "",
+			},
+			expectedError: false,
+		},
+		{
+			name:  "Single sendKeys action with markdown fence and tool_code",
+			input: "`" + `<tool_code><TmuxSendKeys>{"keys":"echo hello\n"}</TmuxSendKeys></tool_code>` + "`",
+			expectedOutput: AIResponse{
+				Sequence: []ActionStep{
+					{Type: "sendKeys", Content: "echo hello\n"},
+				},
+				State: "",
+			},
+			expectedError: false,
+		},
+		{
+			name:  "Single sendKeys action with markdown fences",
+			input: "```\n" + `<TmuxSendKeys>{"keys":"echo hello"}</TmuxSendKeys>` + "\n```",
+			expectedOutput: AIResponse{
+				Sequence: []ActionStep{
+					{Type: "sendKeys", Content: "echo hello"},
 				},
 				State: "",
 			},
@@ -61,10 +83,10 @@ func TestParseAIResponse(t *testing.T) {
 		},
 		{
 			name:  "Single sendKeys action with markdown fences and tool_code",
-			input: "```" + `\n<tool_code>\n<TmuxSendKeys>{"keys":"echo hello\n"}</TmuxSendKeys>\n</tool_code>\n` + "```",
+			input: "```\n" + `<tool_code><TmuxSendKeys>{"keys":"echo hello"}</TmuxSendKeys></tool_code>` + "\n```",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
-					{Type: "sendKeys", Content: "echo hello\n"},
+					{Type: "sendKeys", Content: "echo hello"},
 				},
 				State: "",
 			},
@@ -72,10 +94,10 @@ func TestParseAIResponse(t *testing.T) {
 		},
 		{
 			name:  "Single sendKeys action with xml fences",
-			input: "```" + `xml\n<TmuxSendKeys>{"keys":"echo hello\n"}</TmuxSendKeys>\n` + "```",
+			input: "```xml\n" + `<TmuxSendKeys>{"keys":"echo hello"}</TmuxSendKeys>` + "\n```",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
-					{Type: "sendKeys", Content: "echo hello\n"},
+					{Type: "sendKeys", Content: "echo hello"},
 				},
 				State: "",
 			},
@@ -83,10 +105,32 @@ func TestParseAIResponse(t *testing.T) {
 		},
 		{
 			name:  "Single sendKeys action with xml fences and tool_code",
-			input: "```" + `xml\n<tool_code>\n<TmuxSendKeys>{"keys":"echo hello\n"}</TmuxSendKeys>\n</tool_code>\n` + "```",
+			input: "```xml\n" + `<tool_code><TmuxSendKeys>{"keys":"echo hello"}</TmuxSendKeys></tool_code>` + "\n```",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
-					{Type: "sendKeys", Content: "echo hello\n"},
+					{Type: "sendKeys", Content: "echo hello"},
+				},
+				State: "",
+			},
+			expectedError: false,
+		},
+		{
+			name:  "No action with markdown fences",
+			input: "```\n" + "<Something>value</Something>" + "\n```",
+			expectedOutput: AIResponse{
+				Sequence: []ActionStep{
+					{Type: "message", Content: "```\n<Something>value\n</Something>\n```"},
+				},
+				State: "",
+			},
+			expectedError: false,
+		},
+		{
+			name:  "No action with xml fences",
+			input: "```" + "xml\n<Something>value</Something>\n" + "```",
+			expectedOutput: AIResponse{
+				Sequence: []ActionStep{
+					{Type: "message", Content: "```xml\n<Something>value\n</Something>\n```"},
 				},
 				State: "",
 			},

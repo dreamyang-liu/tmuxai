@@ -8,15 +8,18 @@ import (
 	"github.com/alvinunreal/tmuxai/logger"
 )
 
+var toolCodeRegex = regexp.MustCompile(`(?s)(?:\x60\x60\x60(?:xml)?\s*)?<tool_code>(.*?)</tool_code>(?:\s*\x60\x60\x60)?`)
+
 func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	r := AIResponse{
 		Sequence: make([]ActionStep, 0),
 	}
 	var lastState string
 	currentPos := 0
+	response = removeToolCode(response)
 
 	// Regex to find the next command tag
-	functionPattern := `<(\w+)>({.*?})</\w+>`
+	functionPattern := `(?s)(?:\x60\x60\x60(?:xml)?\s*)?<(\w+)>({.*?})</\w+>(?:\s*\x60\x60\x60)?`
 	reFunctions := regexp.MustCompile(functionPattern)
 
 	for currentPos < len(response) {
@@ -44,9 +47,12 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 			// Trim surrounding fences if adjacent to a tag
 			if loc != nil { // Check if a tag follows this text
 				textContent = strings.TrimSuffix(textContent, "```xml")
+				textContent = strings.TrimSuffix(textContent, "```")
+				textContent = strings.TrimSuffix(textContent, "`")
 			}
 			// Always check for prefix, handles text after a tag or final text part
 			textContent = strings.TrimPrefix(textContent, "```")
+			textContent = strings.TrimPrefix(textContent, "`")
 
 			// Trim whitespace *after* potentially removing fences
 			textContent = strings.TrimSpace(textContent)
@@ -71,7 +77,6 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(argumentsJSON), &args); err != nil {
 			logger.Error("Failed to parse JSON arguments for %s: %v. Args: %s", functionName, err, argumentsJSON)
-			// Skip this invalid tag by advancing past it
 			currentPos = loc[1]
 			continue
 		}
@@ -81,37 +86,22 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 		case "TmuxSendKeys":
 			if keys, ok := args["keys"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "sendKeys", Content: keys})
-				logger.Debug("Parsed sendKeys step: %s", keys)
-			} else {
-				logger.Error("Invalid args for TmuxSendKeys: %v", args)
 			}
 		case "ExecCommand":
 			if cmd, ok := args["command"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "execCommand", Content: cmd})
-				logger.Debug("Parsed execCommand step: %s", cmd)
-			} else {
-				logger.Error("Invalid args for ExecCommand: %v", args)
 			}
 		case "PasteMultilineContent":
 			if content, ok := args["content"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "pasteMultiline", Content: content})
-				logger.Debug("Parsed pasteMultiline step: %s", content)
-			} else {
-				logger.Error("Invalid args for PasteMultilineContent: %v", args)
 			}
 		case "ExecAndWait":
 			if cmd, ok := args["command"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "execAndWait", Content: cmd})
-				logger.Debug("Parsed execAndWait step: %s", cmd)
-			} else {
-				logger.Error("Invalid args for ExecAndWait: %v", args)
 			}
 		case "ChangeState":
 			if state, ok := args["state"].(string); ok {
-				lastState = state // Update last known state, don't add to sequence
-				logger.Debug("Parsed ChangeState: %s", state)
-			} else {
-				logger.Error("Invalid args for ChangeState: %v", args)
+				lastState = state
 			}
 		default:
 			logger.Error("Unknown function call found: %s", functionName)
@@ -126,4 +116,17 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	logger.Debug("Final parsed sequence length: %d", len(r.Sequence))
 
 	return r, nil
+}
+
+func removeToolCode(input string) string {
+	trimmed := strings.TrimSpace(input)
+
+	// Check if the pattern exists in the input
+	if !toolCodeRegex.MatchString(trimmed) {
+		return input
+	}
+
+	// Replace all occurrences of the pattern with just the captured content
+	result := toolCodeRegex.ReplaceAllString(trimmed, "$1")
+	return result
 }
