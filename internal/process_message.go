@@ -28,8 +28,12 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 	}
 
 	currentTmuxWindow := m.GetTmuxPanesInXml(m.Config)
+	var execPaneEnv string
+	if !m.ExecPane.IsSubShell {
+		execPaneEnv = fmt.Sprintf("IMPORTANT: the exec commands syntax should be for the shell: `%s` and OS: `%s`", m.ExecPane.Shell, m.ExecPane.OS)
+	}
 	currentMessage := ChatMessage{
-		Content:   currentTmuxWindow + "\n\n" + message,
+		Content:   currentTmuxWindow + "\n\n" + execPaneEnv + "\n\n" + message,
 		FromUser:  true,
 		Timestamp: time.Now(),
 	}
@@ -97,7 +101,7 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 		case "message":
 			// colorize code blocks in the message
 			if step.Content != "" {
-				fmt.Println(system.Cosmetics(step.Content))
+				m.Println(system.Cosmetics(step.Content))
 			}
 		case "execCommand":
 			code, _ := system.HighlightCode("sh", step.Content)
@@ -111,9 +115,10 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 				isSafe = true
 			}
 			if isSafe {
-				m.Println("Executing command: " + command)
+				fmt.Println("Executing command: " + command)
 				system.TmuxSendCommandToPane(m.ExecPane.Id, command, true)
 				time.Sleep(1 * time.Second) // Consider making delay configurable or smarter
+				m.Println("")
 			} else {
 				m.Status = ""
 				return false // User cancelled
@@ -130,7 +135,7 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 				isSafe = true
 			}
 			if isSafe {
-				m.Println("Sending keys: " + keys)
+				fmt.Println("Sending keys: " + keys)
 				system.TmuxSendCommandToPane(m.ExecPane.Id, keys, false) // Note: send keys usually don't need Enter appended
 				time.Sleep(1 * time.Second)                              // Consider making delay configurable or smarter
 			} else {

@@ -52,10 +52,6 @@ By waiting for and carefully considering the user's response after each tool use
 }
 
 func (m *Manager) chatAssistantPrompt() ChatMessage {
-	var execPaneEnv string
-	if !m.ExecPane.IsSubShell {
-		execPaneEnv = fmt.Sprintf("IMPORTANT: the exec commands should be for the shell: `%s` and OS: `%s`", m.ExecPane.Shell, m.ExecPane.OS)
-	}
 	chatPrompt := fmt.Sprintf(`
 %s
 Your primary function is to assist users by interpreting their requests and executing appropriate actions in the tmux environment.
@@ -63,7 +59,7 @@ You have access to the following functions to control the tmux pane:
 
 1. TmuxSendKeys: Use this to send keystrokes to the tmux pane. You can include up to 5 of these function calls per message, with a maximum of 120 characters each. Supported keys include standard characters, function keys (F1-F12), navigation keys (Up,Down,Left,Right,BSpace,BTab,DC,End,Enter,Escape,Home,IC,NPage,PageDown,PgDn,PPage,PageUp,PgUp,Space,Tab), and modifier keys (C- for Ctrl, M- for Alt/Meta).
 2. ExecCommand: Use this to execute shell commands in the tmux pane. Limited to 120 characters and can only be used once per response. The command's output will be visible to the user with syntax highlighting.
-3. PasteMultilineContent: Use this to send multiline content into the tmux pane. Has same effect as ctrl+v pasting into the tmux pane.
+3. PasteMultilineContent: Use this to send multiline content into the tmux pane. Has same effect as ctrl+v pasting into the tmux pane. Don't use this function if you want to execute a command with it!
 4. ChangeState: Use this to change the state of the tmuxai. 
 	ExecPaneSeemsBusy: Use this value when you need to wait for the exec pane to finish before proceeding.
 	WaitingForUserResponse: Use this value when you have a question, need input or clarification from the user to accomplish the request.
@@ -113,9 +109,7 @@ action required. Include a brief explanation of what you're doing, followed by
 the function call.
 
 Remember to use only max ONE TYPE of ChangeState function in your response.
-
-%s
-`, m.baseSystemPrompt(), execPaneEnv)
+`, m.baseSystemPrompt())
 
 	if m.Config.Prompts.ChatAssistant != "" {
 		chatPrompt = m.baseSystemPrompt() + "\n\n" + m.Config.Prompts.ChatAssistant
