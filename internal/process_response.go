@@ -39,7 +39,18 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 		}
 
 		if textEnd > currentPos {
-			textContent := strings.TrimSpace(response[currentPos:textEnd])
+			textContent := response[currentPos:textEnd]
+
+			// Trim surrounding fences if adjacent to a tag
+			if loc != nil { // Check if a tag follows this text
+				textContent = strings.TrimSuffix(textContent, "```xml")
+			}
+			// Always check for prefix, handles text after a tag or final text part
+			textContent = strings.TrimPrefix(textContent, "```")
+
+			// Trim whitespace *after* potentially removing fences
+			textContent = strings.TrimSpace(textContent)
+
 			if textContent != "" {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "message", Content: textContent})
 				logger.Debug("Parsed message step: %s", textContent)
