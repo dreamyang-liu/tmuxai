@@ -100,7 +100,7 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 	}
 
 	// Don't append to history if AI is waiting for the pane or is watch mode no comment
-	if r.ExecPaneSeemsBusy || r.NoComment {
+	if r.State == "ExecPaneSeemsBusy" || r.State == "NoComment" {
 	} else {
 		m.Messages = append(m.Messages, currentMessage, responseMsg)
 	}
@@ -148,7 +148,7 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 		}
 	}
 
-	if r.ExecPaneSeemsBusy {
+	if r.State == "ExecPaneSeemsBusy" {
 		m.Countdown(m.GetWaitInterval())
 		accomplished := m.ProcessUserMessage("waited for 5 more seconds, here is the current pane(s) content")
 		if accomplished {
@@ -198,19 +198,18 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 		}
 	}
 
-	if r.RequestAccomplished {
+	if r.State == "RequestAccomplished" {
 		m.Status = ""
 		return true
 	}
 
-	if r.WaitingForUserResponse {
+	if r.State == "WaitingForUserResponse" {
 		m.Status = "waiting"
-		return false
+		return true // Stop processing, wait for user input
 	}
 
-	// watch mode only
-	if r.NoComment {
-		return false
+	if r.State == "NoComment" {
+		// no comment, do nothing
 	}
 
 	if !m.WatchMode {
@@ -244,60 +243,36 @@ func (m *Manager) startWatchMode(desc string) {
 }
 
 func (m *Manager) aiFollowedGuidelines(r AIResponse) (string, bool) {
-	// Check if only one boolean is true in AI response
-	boolCount := 0
-	if r.RequestAccomplished {
-		boolCount++
-	}
-	if r.ExecPaneSeemsBusy {
-		boolCount++
-	}
-	if r.WaitingForUserResponse {
-		boolCount++
-	}
-	if r.NoComment {
-		boolCount++
+	// Ensure only one type of action is present
+	numActions := 0
+	if len(r.SendKeys) > 0 { numActions++ }
+	if len(r.ExecCommand) > 0 { numActions++ }
+	if r.PasteMultilineContent != "" { numActions++ }
+	if r.ExecAndWait != "" { numActions++ }
+	if r.State == "RequestAccomplished" { numActions++ }
+	if r.State == "ExecPaneSeemsBusy" { numActions++ }
+	if r.State == "WaitingForUserResponse" { numActions++ }
+	if r.State == "NoComment" { numActions++ }
+
+	if numActions > 1 {
+		return "AI response contains multiple action types. Please provide only one action type.", false
 	}
 
-	if boolCount > 1 {
-		return "You didn't follow the guidelines. Only one boolean flag should be set to true in your response. Pay attention!", false
+	// If there's a message, no action should be present
+	if r.Message != "" && numActions > 0 {
+		return "AI response contains both a message and an action. Please provide only one.", false
 	}
 
-	// Check if only one tag is used
-	tags := []int{len(r.ExecCommand), len(r.SendKeys), len(r.PasteMultilineContent), len(r.ExecAndWait)}
-	count := 0
-	for _, len := range tags {
-		if len > 0 {
-			count++
+	// If there's no message, exactly one action should be present
+	if r.Message == "" && numActions != 1 {
+		return "AI response must contain either a message or exactly one action.", false
+	}
+
+	// Validation specific to watch mode
+	if m.WatchMode {
+		if r.State != "NoComment" && len(r.ExecCommand) == 0 {
+			return "In watch mode, AI must either respond with NoComment or ExecCommand.", false
 		}
-	}
-
-	if count > 1 {
-		return "You didn't follow the guidelines. You can only use one type of XML tag in your response. Pay attention!", false
-	}
-
-	// watch mode has no xml tags, otherwise should be at least 1 xml tag in response
-	if !m.WatchMode && count+boolCount == 0 {
-		return "You didn't follow the guidelines. You must use at least one XML tag in your response. Pay attention!", false
-	}
-
-	// Check if ExecCommand elements have max 120 characters
-	for _, cmd := range r.ExecCommand {
-		if len(cmd) > 120 {
-			return fmt.Sprintf("You didn't follow the guidelines. ExecCommand content should have max 120 characters, but you provided %d characters: Pay attention!", len(cmd)), false
-		}
-	}
-
-	// Check if TmuxSendKeys elements have max 30 characters
-	for _, key := range r.SendKeys {
-		if len(key) > 120 {
-			return fmt.Sprintf("You didn't follow the guidelines. TmuxSendKeys content should have max 30 characters, but you provided %d characters: Pay attention!", len(key)), false
-		}
-	}
-
-	// Check if there are max 5 TmuxSendKeys elements
-	if len(r.SendKeys) > 5 {
-		return fmt.Sprintf("You didn't follow the guidelines. There should be max 5 TmuxSendKeys elements, but you provided %d elements. Pay attention!", len(r.SendKeys)), false
 	}
 
 	return "", true

@@ -18,10 +18,7 @@ type AIResponse struct {
 	ExecCommand            []string
 	PasteMultilineContent  string
 	ExecAndWait            string
-	RequestAccomplished    bool
-	ExecPaneSeemsBusy      bool
-	WaitingForUserResponse bool
-	NoComment              bool
+	State                  string
 }
 
 // Parsed only when pane is prepared
@@ -147,19 +144,13 @@ func (ai *AIResponse) String() string {
 	ExecCommand: %v
 	PasteMultilineContent: %s
 	ExecAndWait: %s
-	RequestAccomplished: %v
-	ExecPaneSeemsBusy: %v
-	WaitingForUserResponse: %v
-	NoComment: %v
+	State: %s
 `,
 		ai.Message,
 		ai.SendKeys,
 		ai.ExecCommand,
 		ai.PasteMultilineContent,
 		ai.ExecAndWait,
-		ai.RequestAccomplished,
-		ai.ExecPaneSeemsBusy,
-		ai.WaitingForUserResponse,
-		ai.NoComment,
+		ai.State,
 	)
 }
