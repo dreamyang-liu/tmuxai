@@ -85,107 +85,113 @@ func (m *Manager) ProcessUserMessage(message string) bool {
 		Timestamp: time.Now(),
 	}
 
-	// colorize code blocks in the response
-	if r.Message != "" {
-		fmt.Println(system.Cosmetics(r.Message))
-	}
-
 	// Don't append to history if AI is waiting for the pane or is watch mode no comment
 	if r.State == "ExecPaneSeemsBusy" || r.State == "NoComment" {
 	} else {
 		m.Messages = append(m.Messages, currentMessage, responseMsg)
 	}
 
-	// observe mode
-	for _, execCommand := range r.ExecCommand {
-		code, _ := system.HighlightCode("sh", execCommand)
-		m.Println(code)
-
-		isSafe := false
-		command := execCommand
-		if m.GetExecConfirm() {
-			isSafe, command = m.confirmedToExec(execCommand, "Execute this command?", true)
-		} else {
-			isSafe = true
-		}
-		if isSafe {
-			m.Println("Executing command: " + command)
-			system.TmuxSendCommandToPane(m.ExecPane.Id, command, true)
-			time.Sleep(1 * time.Second)
-		} else {
-			m.Status = ""
+	// --- Execute Action Sequence ---
+	for _, step := range r.Sequence {
+		// Check status before each step
+		if m.Status == "" {
+			logger.Info("Status changed, aborting sequence execution.")
 			return false
 		}
-	}
 
-	for _, sendKey := range r.SendKeys {
-		code, _ := system.HighlightCode("txt", sendKey)
-		m.Println(code)
+		switch step.Type {
+		case "message":
+			// colorize code blocks in the message
+			if step.Content != "" {
+				fmt.Println(system.Cosmetics(step.Content))
+			}
+		case "execCommand":
+			code, _ := system.HighlightCode("sh", step.Content)
+			m.Println(code)
 
-		isSafe := false
-		command := sendKey
-		if m.GetSendKeysConfirm() {
-			isSafe, command = m.confirmedToExec(sendKey, "Send this key(s)?", true)
-		} else {
-			isSafe = true
+			isSafe := false
+			command := step.Content
+			if m.GetExecConfirm() {
+				isSafe, command = m.confirmedToExec(step.Content, "Execute this command?", true)
+			} else {
+				isSafe = true
+			}
+			if isSafe {
+				m.Println("Executing command: " + command)
+				system.TmuxSendCommandToPane(m.ExecPane.Id, command, true)
+				time.Sleep(1 * time.Second) // Consider making delay configurable or smarter
+			} else {
+				m.Status = ""
+				return false // User cancelled
+			}
+		case "sendKeys":
+			code, _ := system.HighlightCode("txt", step.Content)
+			m.Println(code)
+
+			isSafe := false
+			keys := step.Content
+			if m.GetSendKeysConfirm() {
+				isSafe, keys = m.confirmedToExec(step.Content, "Send this key(s)?", true)
+			} else {
+				isSafe = true
+			}
+			if isSafe {
+				m.Println("Sending keys: " + keys)
+				system.TmuxSendCommandToPane(m.ExecPane.Id, keys, false) // Note: send keys usually don't need Enter appended
+				time.Sleep(1 * time.Second)                              // Consider making delay configurable or smarter
+			} else {
+				m.Status = ""
+				return false // User cancelled
+			}
+		case "execAndWait":
+			code, _ := system.HighlightCode("sh", step.Content)
+			fmt.Println(code)
+
+			isSafe := false
+			command := step.Content
+			if m.GetExecConfirm() {
+				isSafe, command = m.confirmedToExec(step.Content, "Execute this command and wait?", true)
+			} else {
+				isSafe = true
+			}
+			if isSafe {
+				m.ExecWaitCapture(command) // This function handles its own waiting/processing
+			} else {
+				m.Status = ""
+				return false // User cancelled
+			}
+		case "pasteMultiline":
+			code, _ := system.HighlightCode("txt", step.Content)
+			fmt.Println(code)
+
+			isSafe := false
+			content := step.Content
+			if m.GetPasteMultilineConfirm() {
+				isSafe, _ = m.confirmedToExec(content, "Paste multiline content?", false)
+			} else {
+				isSafe = true
+			}
+
+			if isSafe {
+				m.Println("Pasting...")
+				system.TmuxSendCommandToPane(m.ExecPane.Id, content, true) // Assuming paste needs Enter implicitly handled by content or context
+				time.Sleep(1 * time.Second)                                // Consider making delay configurable or smarter
+			} else {
+				m.Status = ""
+				return false // User cancelled
+			}
+		default:
+			logger.Error("Unknown action step type in sequence: %s", step.Type)
 		}
-		if isSafe {
-			m.Println("Sending keys: " + command)
-			system.TmuxSendCommandToPane(m.ExecPane.Id, command, false)
-			time.Sleep(1 * time.Second)
-		} else {
-			m.Status = ""
-			return false
-		}
 	}
+	// --- End Action Sequence Execution ---
 
+	// --- Handle Final State ---
 	if r.State == "ExecPaneSeemsBusy" {
 		m.Countdown(m.GetWaitInterval())
 		accomplished := m.ProcessUserMessage("waited for 5 more seconds, here is the current pane(s) content")
 		if accomplished {
 			return true
-		}
-	}
-
-	// prepared mode
-	if r.ExecAndWait != "" {
-		code, _ := system.HighlightCode("sh", r.ExecAndWait)
-		fmt.Println(code)
-
-		isSafe := false
-		command := r.ExecAndWait
-		if m.GetExecConfirm() {
-			isSafe, command = m.confirmedToExec(r.ExecAndWait, "Execute this command?", true)
-		} else {
-			isSafe = true
-		}
-		if isSafe {
-			m.ExecWaitCapture(command)
-		} else {
-			m.Status = ""
-			return false
-		}
-	}
-
-	// observe or prepared mode
-	if r.PasteMultilineContent != "" {
-		code, _ := system.HighlightCode("txt", r.PasteMultilineContent)
-		fmt.Println(code)
-
-		isSafe := false
-		if m.GetPasteMultilineConfirm() {
-			isSafe, _ = m.confirmedToExec(r.PasteMultilineContent, "Paste multiline content?", false)
-		} else {
-			isSafe = true
-		}
-
-		if isSafe {
-			m.Println("Pasting...")
-			system.TmuxSendCommandToPane(m.ExecPane.Id, r.PasteMultilineContent, true)
-			time.Sleep(1 * time.Second)
-		} else {
-			m.Status = ""
-			return false
 		}
 	}
 
