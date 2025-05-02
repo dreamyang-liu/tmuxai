@@ -3,12 +3,14 @@ package internal
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/alvinunreal/tmuxai/logger"
 )
 
-var toolCodeRegex = regexp.MustCompile(`(?s)(?:\x60\x60\x60(?:xml)?\s*)?<tool_code>(.*?)</tool_code>(?:\s*\x60\x60\x60)?`)
+var toolCodeRegex = regexp.MustCompile(`(?s)(?:\x60\x60\x60(?:xml)?\s*)?<tool_code>(.*?)</tool_code>(?:\s*\x60)?(?:\x60\x60)?`)
+var functionNames = []string{"TmuxSendKeys", "ExecCommand", "PasteMultilineContent", "ExecAndWait", "ChangeState"}
 
 func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	r := AIResponse{
@@ -19,7 +21,7 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 	response = removeToolCode(response)
 
 	// Regex to find the next command tag
-	functionPattern := `(?s)(?:\x60\x60\x60(?:xml)?\s*)?<(\w+)>({.*?})</\w+>(?:\s*\x60\x60\x60)?`
+	functionPattern := `(?s)(?:\x60\x60\x60(?:xml)?\s*)?<(\w+)>({.*?})</\w+>(?:\s*\x60)?(?:\x60\x60)?`
 	reFunctions := regexp.MustCompile(functionPattern)
 
 	for currentPos < len(response) {
@@ -45,21 +47,20 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 			textContent := response[currentPos:textEnd]
 
 			// Trim surrounding fences if adjacent to a tag
-			if loc != nil { // Check if a tag follows this text
-				textContent = strings.TrimSuffix(textContent, "```xml")
+			if loc != nil && slices.Contains(functionNames, response[loc[2]:loc[3]]) { // Check if a tag follows this text
+				textContent = strings.TrimPrefix(textContent, "```xml")
+				textContent = strings.TrimPrefix(textContent, "```")
+				textContent = strings.TrimPrefix(textContent, "`")
+
+				// Always check for prefix, handles text after a tag or final text part
 				textContent = strings.TrimSuffix(textContent, "```")
 				textContent = strings.TrimSuffix(textContent, "`")
 			}
-			// Always check for prefix, handles text after a tag or final text part
-			textContent = strings.TrimPrefix(textContent, "```")
-			textContent = strings.TrimPrefix(textContent, "`")
-
 			// Trim whitespace *after* potentially removing fences
 			textContent = strings.TrimSpace(textContent)
 
 			if textContent != "" {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "message", Content: textContent})
-				logger.Debug("Parsed message step: %s", textContent)
 			}
 		}
 
@@ -71,7 +72,6 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 		// 2. Process the found tag
 		functionName := response[loc[2]:loc[3]]
 		argumentsJSON := response[loc[4]:loc[5]]
-		logger.Debug("Found tag: %s with args: %s", functionName, argumentsJSON)
 
 		// Parse arguments
 		var args map[string]interface{}
@@ -82,38 +82,42 @@ func (m *Manager) parseAIResponse(response string) (AIResponse, error) {
 		}
 
 		// Process based on function name
+		var functionTag bool
 		switch functionName {
 		case "TmuxSendKeys":
 			if keys, ok := args["keys"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "sendKeys", Content: keys})
+				functionTag = true
 			}
 		case "ExecCommand":
 			if cmd, ok := args["command"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "execCommand", Content: cmd})
+				functionTag = true
 			}
 		case "PasteMultilineContent":
 			if content, ok := args["content"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "pasteMultiline", Content: content})
+				functionTag = true
 			}
 		case "ExecAndWait":
 			if cmd, ok := args["command"].(string); ok {
 				r.Sequence = append(r.Sequence, ActionStep{Type: "execAndWait", Content: cmd})
+				functionTag = true
 			}
 		case "ChangeState":
 			if state, ok := args["state"].(string); ok {
 				lastState = state
+				functionTag = true
 			}
 		default:
-			logger.Error("Unknown function call found: %s", functionName)
+			logger.Error("Unknown function call found: %s", functionTag)
 		}
 
 		// 3. Advance current position past the processed tag
 		currentPos = loc[1]
 	}
 
-	r.State = lastState // Assign the last encountered state
-	logger.Debug("Final parsed state: %s", r.State)
-	logger.Debug("Final parsed sequence length: %d", len(r.Sequence))
+	r.State = lastState
 
 	return r, nil
 }

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -119,7 +120,7 @@ func TestParseAIResponse(t *testing.T) {
 			input: "```\n" + "<Something>value</Something>" + "\n```",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
-					{Type: "message", Content: "```\n<Something>value\n</Something>\n```"},
+					{Type: "message", Content: "```\n<Something>value</Something>\n```"},
 				},
 				State: "",
 			},
@@ -130,7 +131,7 @@ func TestParseAIResponse(t *testing.T) {
 			input: "```" + "xml\n<Something>value</Something>\n" + "```",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
-					{Type: "message", Content: "```xml\n<Something>value\n</Something>\n```"},
+					{Type: "message", Content: "```xml\n<Something>value</Something>\n```"},
 				},
 				State: "",
 			},
@@ -161,7 +162,7 @@ func TestParseAIResponse(t *testing.T) {
 		},
 		{
 			name:  "Text and actions mixed",
-			input: `First, go to tmp: <TmuxSendKeys>{"keys":"cd /tmp\n"}</TmuxSendKeys> Then, check where you are: <ExecCommand>{"command":"pwd"}</ExecCommand> All done.`,
+			input: `First, go to tmp: <TmuxSendKeys>{"keys":"cd /tmp\n"}</TmuxSendKeys> Then, check where you are: <ExecCommand>{"command":"pwd"}</ExecCommand>All done.`,
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
 					{Type: "message", Content: "First, go to tmp:"},
@@ -176,7 +177,7 @@ func TestParseAIResponse(t *testing.T) {
 		},
 		{
 			name:  "Text and actions mixed with markdown fences",
-			input: "Okay, I will run the command.\n" + "```" + `xml\n<ExecCommand>{"command":"ls -l"}</ExecCommand>\n` + "```\nLet me know the output.",
+			input: "Okay, I will run the command.\n" + "```xml\n" + `<ExecCommand>{"command":"ls -l"}</ExecCommand>` + "\n```\nLet me know the output.",
 			expectedOutput: AIResponse{
 				Sequence: []ActionStep{
 					{Type: "message", Content: "Okay, I will run the command."},
@@ -277,7 +278,10 @@ func TestParseAIResponse(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				// Compare Sequence length and content carefully
-				assert.Equal(t, len(tt.expectedOutput.Sequence), len(actualOutput.Sequence), "Sequence length mismatch")
+				if !assert.Equal(t, len(tt.expectedOutput.Sequence), len(actualOutput.Sequence), "Sequence length mismatch") {
+					fmt.Println(tt.expectedOutput.Sequence)
+					fmt.Println(actualOutput.Sequence)
+				}
 				for i := range tt.expectedOutput.Sequence {
 					if i < len(actualOutput.Sequence) {
 						assert.Equal(t, tt.expectedOutput.Sequence[i], actualOutput.Sequence[i], "Sequence item mismatch at index %d", i)
