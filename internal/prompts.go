@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -41,24 +42,32 @@ DO NOT WRITE MORE TEXT AFTER THE TOOL CALLS IN A RESPONSE. You can wait until th
 
 }
 
-func (m *Manager) chatAssistantPrompt() ChatMessage {
-	chatPrompt := fmt.Sprintf(`
-%s
+func (m *Manager) chatAssistantPrompt(prepared bool) ChatMessage {
+	var builder strings.Builder
+	builder.WriteString(m.baseSystemPrompt())
+	builder.WriteString(`
 Your primary function is to assist users by interpreting their requests and executing appropriate actions.
 You have access to the following XML tags to control the tmux pane:
 
-1. <TmuxSendKeys>: Use this to send keystrokes to the tmux pane. Supported keys include standard characters, function keys (F1-F12), navigation keys (Up,Down,Left,Right,BSpace,BTab,DC,End,Enter,Escape,Home,IC,NPage,PageDown,PgDn,PPage,PageUp,PgUp,Space,Tab), and modifier keys (C-, M-).
-2. <ExecCommand>: Use this to execute shell commands in the tmux pane.
-3. <PasteMultilineContent>: Use this to send multiline content into the tmux pane. You can use this to send multiline content, it's forbidden to use this to execute commands in a shell, when detected fish, bash, zsh etc prompt, for that you should use ExecCommand. Main use for this is when it's vim open and you need to type multiline text, etc.
-4. <ExecPaneSeemsBusy>: Use this boolean tag (value 1) when you need to wait for the exec pane to finish before proceeding.
-5. <WaitingForUserResponse>: Use this boolean tag (value 1) when you have a question, need input or clarification from the user to accomplish the request.
-6. <RequestAccomplished>: Use this boolean tag (value 1) when you have successfully completed and verified the user's request.
+<TmuxSendKeys>: Use this to send keystrokes to the tmux pane. Supported keys include standard characters, function keys (F1-F12), navigation keys (Up,Down,Left,Right,BSpace,BTab,DC,End,Enter,Escape,Home,IC,NPage,PageDown,PgDn,PPage,PageUp,PgUp,Space,Tab), and modifier keys (C-, M-).
+<ExecCommand>: Use this to execute shell commands in the tmux pane.
+<PasteMultilineContent>: Use this to send multiline content into the tmux pane. You can use this to send multiline content, it's forbidden to use this to execute commands in a shell, when detected fish, bash, zsh etc prompt, for that you should use ExecCommand. Main use for this is when it's vim open and you need to type multiline text, etc.
+<WaitingForUserResponse>: Use this boolean tag (value 1) when you have a question, need input or clarification from the user to accomplish the request.
+<RequestAccomplished>: Use this boolean tag (value 1) when you have successfully completed and verified the user's request.
+`)
+
+	if !prepared {
+		builder.WriteString(`<ExecPaneSeemsBusy>: Use this boolean tag (value 1) when you need to wait for the exec pane to finish before proceeding.`)
+	}
+
+	builder.WriteString(`
 
 When responding to user messages:
 1. Analyze the user's request carefully.
 2. Analyze the user's current tmux pane(s) content and detect: 
-- what's currently running
+- what is current there running based on content, deduced especially from the last lines
 - is the pane busy running a command or is it idle
+- should you wait or you should proceed
 
 3. Based on your analysis, choose the most appropriate action required and call it at the end of your response with appropriate tool. Always should be at least 1 XML tag.
 4. Respond with user message with normal text and place function calls at the end of your response.
@@ -67,90 +76,70 @@ Avoid creating a script files to achieve a task, if the same task can be achieve
 Avoid creating files, command output files, intermediate files unless necessary.
 There is no need to use echo to print information content. You can communicate to the user using the messaging commands if needed and you can just talk to yourself if you just want to reflect and think.
 Respond to the user's message using the appropriate XML tag based on the action required. Include a brief explanation of what you're doing, followed by the XML tag.
-CRITICAL: Use only ONE TYPE, KIND of XML tag in your response and never mix different types of XML tags in the same response.
-CRITICAL: Always include at least one XML tag in your response.
-
-When generating your response pay attention to this checks:
-This is CRITICAL, If the ExecCommand content character length is more than 60 characters do this: try to split the task into smaller steps and generate shorter ExecCommand for the first step only in this response.
-
 ==== End of high priority rules. ====
 
+When generating your response pay attention to this checks:
+==== Rules which are critical priority ====
 
-Examples of proper responses:
-1. Sending keystrokes:
+Check the length of ExecCommand content. Is more than 60 characters? If yes, try to split the task into smaller steps and generate shorter ExecCommand for the first step only in this response.
+Use only ONE TYPE, KIND of XML tag in your response and never mix different types of XML tags in the same response.
+Always include at least one XML tag in your response.
+
+==== End of critical priority rules. ====
+
+Learn from examples:
+<examples_of_responses>
+
+<sending_keystrokes>
 I'll open the file 'example.txt' in vim for you.
 <TmuxSendKeys>vim example.txt</TmuxSendKeys>
 <TmuxSendKeys>Enter</TmuxSendKeys>
 <TmuxSendKeys>:set paste</TmuxSendKeys> (before sending multiline content, essential to put vim in paste mode)
 <TmuxSendKeys>Enter</TmuxSendKeys>
 <TmuxSendKeys>i</TmuxSendKeys>
+</sending_keystrokes>
 
-2. Sending modifier keystrokes:
+<sending_modifier_keystrokes>
 <TmuxSendKeys>C-a</TmuxSendKeys>
 <TmuxSendKeys>Escape</TmuxSendKeys>
 <TmuxSendKeys>M-a</TmuxSendKeys>
+</sending_modifier_keystrokes>
 
-3. Executing a command:
-I'll list the contents of the current directory.
-<ExecCommand>ls -l</ExecCommand>
-
-4. Waiting for user input:
+<waiting_for_user_input>
 Do you want me to save the changes to the file?
 <WaitingForUserResponse>1</WaitingForUserResponse>
+</waiting_for_user_input>
 
-5. Completing a request:
+<completing_a_request>
 I've successfully created the new directory as requested.
 <RequestAccomplished>1</RequestAccomplished>
+</completing_a_request>
 
-6. Waiting for a command to finish:
+<executing_a_command>
+I'll list the contents of the current directory.
+<ExecCommand>ls -l</ExecCommand>
+</executing_a_command>
+`)
+
+	if prepared {
+		builder.WriteString(`
+<waiting_for_a_command_to_finish>
 Based on the pane content, seems like ping is still running.
 I'll wait for it to complete before proceeding.
 <ExecPaneSeemsBusy>1</ExecPaneSeemsBusy>
-`, m.baseSystemPrompt())
+</waiting_for_a_command_to_finish>
+`)
+	}
 
-	// Override with config if defined
+	builder.WriteString(`</examples_of_responses>`)
+
+	// Custom additional prompt
 	if m.Config.Prompts.ChatAssistant != "" {
-		chatPrompt = m.baseSystemPrompt() + "\n\n" + m.Config.Prompts.ChatAssistant
+		builder.WriteString(m.Config.Prompts.ChatAssistant)
 	}
 
 	return ChatMessage{
-		Content:   chatPrompt,
-		Timestamp: time.Now(),
-		FromUser:  false,
-	}
-}
-
-func (m *Manager) chatAssistantPreparedPrompt() ChatMessage {
-	chatPrompt := fmt.Sprintf(`
-%s
-Response to user's request and besides use the following special syntax:
-
-Shell command execution capabilities: enabled
-<ExecAndWait>
-In your reponse you can include this XML tag to trigger execution of a command in tmuxai exec pane.
-Command will automatically be executed, waited till the execution is finished, output and status code captured and sent to you on the next message.
-This means you can execute multiple commands, by sending first one, than waiting for the new message with the output, to than send another.
-Content in ExecAndWait is directly as is sent to the exec pane for execution in the given shell.
-Your commands should be optimized for the following environment:
-
-Shell: %s
-</ExecAndWait>
-
-<RequestAccomplished>1</RequestAccomplished>
-The process is following: when sending all tmux keys is finished, there is 1 second delay and you will receive updated request with new TmuxWindowPane details.
-When you verify and confirm so, include in your response this xml tag to indicate that the user's request has been successfully verified and is completed.
-
-<WaitingForUserResponse>1</WaitingForUserResponse>
-Don't forget to always include in your response WaitingForUserResponse when you need an input from the user, such as you asked a question, confirmation, clarification, etc.
-`, m.baseSystemPrompt(), m.ExecPane.Shell)
-
-	// Override with config if defined
-	if m.Config.Prompts.ChatAssistantPrepared != "" {
-		chatPrompt = m.baseSystemPrompt() + "\n\n" + m.Config.Prompts.ChatAssistantPrepared
-	}
-
-	return ChatMessage{
-		Content:   chatPrompt,
+		Content:   builder.String(),
 		Timestamp: time.Now(),
 		FromUser:  false,
 	}
@@ -172,7 +161,7 @@ If no response is needed, output:
 `, m.baseSystemPrompt())
 
 	if m.Config.Prompts.Watch != "" {
-		chatPrompt = m.baseSystemPrompt() + "\n\n" + m.Config.Prompts.Watch
+		chatPrompt = chatPrompt + "\n\n" + m.Config.Prompts.Watch
 	}
 
 	return ChatMessage{

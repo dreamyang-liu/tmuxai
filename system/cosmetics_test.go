@@ -44,12 +44,22 @@ func TestCosmetics(t *testing.T) {
 		},
 		{
 			name:  "Regresseion",
-			input: "**SET**: This command is used to set a value for a given key.\n ```redis\n SET mykey \"hello\"\n ```",
+			input: "**SET**: This command is used to set a value for a given key.\n ```redis\n SET mykey \"hello\"\n```",
 			expected: []string{
 				"SET", "mykey", "hello",
 			},
 			notExpected: []string{
 				"```", "redis",
+			},
+		},
+		{
+			name:  "Regresseion 2",
+			input: "I will execute the ping commands and then generate a latency report.\n```tool_code\nping google.com -c 5\n```",
+			expected: []string{
+				"ping", "google.com", "-c", "5",
+			},
+			notExpected: []string{
+				"```", "tool_code",
 			},
 		},
 	}

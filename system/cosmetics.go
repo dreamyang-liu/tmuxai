@@ -13,7 +13,7 @@ import (
 // All other text is left as-is.
 func Cosmetics(message string) string {
 	// Regex for code blocks: ```lang\ncode\n``` (allowing spaces before the backticks)
-	codeBlockRe := regexp.MustCompile(`(?s)\x60{3}([a-zA-Z0-9]*)\s*\n(.*?)\s*\n\x60{3}`)
+	codeBlockRe := regexp.MustCompile(`(?s)\x60{3}([a-zA-Z0-9-_]*)\s*\n(.*?)\s*\n\x60{3}`)
 	// Regex for inline code: `code`
 	inlineCodeRe := regexp.MustCompile("`([^`]+)`")
 
