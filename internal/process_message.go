@@ -141,24 +141,42 @@ func (m *Manager) ProcessUserMessage(ctx context.Context, message string) bool {
 		}
 	}
 
-	for _, sendKey := range r.SendKeys {
-		code, _ := system.HighlightCode("txt", sendKey)
-		m.Println(code)
-
-		isSafe := false
-		command := sendKey
-		if m.GetSendKeysConfirm() {
-			isSafe, command = m.confirmedToExec(sendKey, "Send this key(s)?", true)
-		} else {
-			isSafe = true
+	// Process SendKeys
+	if len(r.SendKeys) > 0 {
+		// Show preview of all keys
+		keysPreview := "Keys to send:\n"
+		for i, sendKey := range r.SendKeys {
+			code, _ := system.HighlightCode("txt", sendKey)
+			if i == len(r.SendKeys)-1 {
+				keysPreview += code
+			} else {
+				keysPreview += code + "\n"
+			}
 		}
-		if isSafe {
-			m.Println("Sending keys: " + command)
-			system.TmuxSendCommandToPane(m.ExecPane.Id, command, false)
+
+		m.Println(keysPreview)
+
+		// Determine confirmation message based on number of keys
+		confirmMessage := "Send this key?"
+		if len(r.SendKeys) > 1 {
+			confirmMessage = "Send all these keys?"
+		}
+
+		// Get confirmation if required
+		allConfirmed := true
+		if m.GetSendKeysConfirm() {
+			allConfirmed, _ = m.confirmedToExec("keys shown above", confirmMessage, true)
+			if !allConfirmed {
+				m.Status = ""
+				return false
+			}
+		}
+
+		// Send each key with delay
+		for _, sendKey := range r.SendKeys {
+			m.Println("Sending keys: " + sendKey)
+			system.TmuxSendCommandToPane(m.ExecPane.Id, sendKey, false)
 			time.Sleep(1 * time.Second)
-		} else {
-			m.Status = ""
-			return false
 		}
 	}
 
