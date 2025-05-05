@@ -63,7 +63,15 @@ func (m *Manager) ProcessUserMessage(ctx context.Context, message string) bool {
 			return false
 		}
 
-		fmt.Println("Failed to get response from AI: " + err.Error())
+		// Log both to console and debug file to capture error context
+		errMsg := "Failed to get response from AI: " + err.Error()
+		fmt.Println(errMsg)
+
+		// Debug the failed request even when there's an error
+		if m.Config.Debug {
+			debugChatMessages(append(history, currentMessage), "ERROR: "+err.Error())
+		}
+
 		return false
 	}
 
@@ -77,7 +85,16 @@ func (m *Manager) ProcessUserMessage(ctx context.Context, message string) bool {
 	if err != nil {
 		s.Stop()
 		m.Status = ""
-		fmt.Println("Failed to parse AI response: " + err.Error())
+
+		// Log both to console and debug file
+		errMsg := "Failed to parse AI response: " + err.Error()
+		fmt.Println(errMsg)
+
+		// Debug the failed parsing even when there's an error
+		if m.Config.Debug {
+			debugChatMessages(append(history, currentMessage), "PARSE ERROR: "+response)
+		}
+
 		return false
 	}
 
