@@ -13,12 +13,18 @@ import (
 
 	"github.com/alvinunreal/tmuxai/config"
 	"github.com/alvinunreal/tmuxai/logger"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 )
 
-// AiClient represents an AI client for interacting with OpenRouter API
+// AiClient represents an AI client for interacting with various AI providers
 type AiClient struct {
-	config *config.OpenRouterConfig
-	client *http.Client
+	config        *config.OpenRouterConfig
+	client        *http.Client
+	bedrockClient *bedrockruntime.Client
 }
 
 // Message represents a chat message
@@ -48,10 +54,38 @@ type ChatCompletionResponse struct {
 }
 
 func NewAiClient(cfg *config.OpenRouterConfig) *AiClient {
-	return &AiClient{
+	client := &AiClient{
 		config: cfg,
 		client: &http.Client{},
 	}
+
+	// Initialize AWS Bedrock client if provider is bedrock
+	if cfg.Provider == "bedrock" {
+		// Set default service name if not provided
+		serviceName := cfg.ServiceName
+		if serviceName == "" {
+			serviceName = "bedrock-runtime"
+		}
+
+		// Set default region if not provided
+		region := cfg.Region
+		if region == "" {
+			region = "us-west-2"
+		}
+
+		// Load AWS configuration
+		awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+			awsconfig.WithRegion(region),
+		)
+		if err != nil {
+			logger.Error("Failed to load AWS config: %v", err)
+		} else {
+			client.bedrockClient = bedrockruntime.NewFromConfig(awsCfg)
+			logger.Info("Initialized AWS Bedrock client for region %s", region)
+		}
+	}
+
+	return client
 }
 
 // GetResponseFromChatMessages gets a response from the AI based on chat messages
@@ -87,8 +121,19 @@ func (c *AiClient) GetResponseFromChatMessages(ctx context.Context, chatMessages
 	return response, nil
 }
 
-// ChatCompletion sends a chat completion request to the OpenRouter API
+// ChatCompletion sends a chat completion request to the appropriate AI provider
 func (c *AiClient) ChatCompletion(ctx context.Context, messages []Message, model string) (string, error) {
+	// Use AWS Bedrock if provider is bedrock
+	if c.config.Provider == "bedrock" {
+		return c.bedrockChatCompletion(ctx, messages, model)
+	}
+
+	// Default to OpenRouter/OpenAI compatible API
+	return c.openRouterChatCompletion(ctx, messages, model)
+}
+
+// openRouterChatCompletion sends a chat completion request to the OpenRouter/OpenAI compatible API
+func (c *AiClient) openRouterChatCompletion(ctx context.Context, messages []Message, model string) (string, error) {
 	reqBody := ChatCompletionRequest{
 		Model:    model,
 		Messages: messages,
@@ -164,6 +209,115 @@ func (c *AiClient) ChatCompletion(ctx context.Context, messages []Message, model
 	// Enhanced error for no completion choices
 	logger.Error("No completion choices returned. Raw response: %s", string(body))
 	return "", fmt.Errorf("no completion choices returned (model: %s, status: %d)", model, resp.StatusCode)
+}
+
+// bedrockChatCompletion sends a chat completion request to AWS Bedrock
+func (c *AiClient) bedrockChatCompletion(ctx context.Context, messages []Message, model string) (string, error) {
+	if c.bedrockClient == nil {
+		return "", fmt.Errorf("AWS Bedrock client not initialized")
+	}
+
+	// Determine the model ID to use with Bedrock
+	modelID := model
+	if modelID == "" {
+		modelID = c.config.Model
+	}
+
+	// Convert messages to Bedrock Converse API format
+	input, err := c.formatBedrockConverseRequest(messages, modelID)
+	if err != nil {
+		logger.Error("Failed to format Bedrock Converse request: %v", err)
+		return "", fmt.Errorf("failed to format Bedrock Converse request: %w", err)
+	}
+
+	logger.Debug("Sending Bedrock API request with model: %s", modelID)
+
+	// Send the request to Bedrock
+	output, err := c.bedrockClient.Converse(ctx, &input)
+	if err != nil {
+		if ctx.Err() == context.Canceled {
+			return "", fmt.Errorf("request canceled: %w", ctx.Err())
+		}
+		logger.Error("Failed to invoke Bedrock model: %v", err)
+		return "", fmt.Errorf("failed to invoke Bedrock model: %w", err)
+	}
+
+	// Parse the response based on the model
+	responseContent, err := c.parseBedrockResponse(output)
+	if err != nil {
+		logger.Error("Failed to parse Bedrock response: %v", err)
+		return "", fmt.Errorf("failed to parse Bedrock response: %w", err)
+	}
+
+	logger.Debug("Received Bedrock response (%d characters): %s", len(responseContent), responseContent)
+	return responseContent, nil
+}
+
+// formatBedrockConverseRequest formats messages for the Bedrock Converse API
+func (c *AiClient) formatBedrockConverseRequest(messages []Message, modelID string) (bedrockruntime.ConverseInput, error) {
+	request := bedrockruntime.ConverseInput{
+		ModelId:  aws.String(modelID),
+		Messages: []types.Message{},
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens:   aws.Int32(8192),
+			Temperature: aws.Float32(0.3),
+			TopP:        aws.Float32(0.9),
+		},
+		System: []types.SystemContentBlock{},
+	}
+
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			request.System = append(request.System, &types.SystemContentBlockMemberText{
+				Value: msg.Content,
+			})
+			fmt.Printf("System message added to request: %s\n", msg.Content)
+		} else {
+			request.Messages = append(request.Messages, types.Message{
+				Role: getConversationRole(msg.Role),
+				Content: []types.ContentBlock{
+					&types.ContentBlockMemberText{
+						Value: msg.Content,
+					},
+				},
+			})
+		}
+	}
+
+	// Use system pompot cache
+	request.System = append(request.System, &types.SystemContentBlockMemberCachePoint{
+		Value: types.CachePointBlock{
+			Type: types.CachePointTypeDefault,
+		},
+	})
+
+	return request, nil
+}
+
+func getConversationRole(role string) types.ConversationRole {
+	switch role {
+	case "user":
+		return types.ConversationRoleUser
+	case "assistant":
+		return types.ConversationRoleAssistant
+	default:
+		return types.ConversationRoleAssistant
+	}
+}
+
+// parseBedrockResponse parses the response from Bedrock based on the model
+func (c *AiClient) parseBedrockResponse(output *bedrockruntime.ConverseOutput) (string, error) {
+	// type switches can be used to check the union value
+	switch v := output.Output.(type) {
+	case *types.ConverseOutputMemberMessage:
+		return v.Value.Content[0].(*types.ContentBlockMemberText).Value, nil // Value is types.Message
+
+	case *types.UnknownUnionMember:
+		return "", fmt.Errorf("unknown tag: %s", v.Tag)
+
+	default:
+		return "", fmt.Errorf("union is nil or unknown type")
+	}
 }
 
 func debugChatMessages(chatMessages []ChatMessage, response string) {

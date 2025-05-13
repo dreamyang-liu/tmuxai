@@ -25,11 +25,14 @@ type Config struct {
 	Prompts               PromptsConfig    `mapstructure:"prompts"`
 }
 
-// OpenRouterConfig holds OpenRouter API configuration
+// OpenRouterConfig holds API configuration for OpenRouter and compatible services
 type OpenRouterConfig struct {
-	APIKey  string `mapstructure:"api_key"`
-	Model   string `mapstructure:"model"`
-	BaseURL string `mapstructure:"base_url"`
+	APIKey      string `mapstructure:"api_key"`
+	Model       string `mapstructure:"model"`
+	BaseURL     string `mapstructure:"base_url"`
+	Provider    string `mapstructure:"provider"`     // "openrouter", "openai", "anthropic", "bedrock", etc.
+	Region      string `mapstructure:"region"`       // AWS region for Bedrock
+	ServiceName string `mapstructure:"service_name"` // Service name for Bedrock (e.g., "bedrock-runtime")
 }
 
 // PromptsConfig holds customizable prompt templates
@@ -53,8 +56,9 @@ func DefaultConfig() *Config {
 		WhitelistPatterns:     []string{},
 		BlacklistPatterns:     []string{},
 		OpenRouter: OpenRouterConfig{
-			BaseURL: "https://openrouter.ai/api/v1",
-			Model:   "google/gemini-2.5-flash-preview",
+			BaseURL:  "https://openrouter.ai/api/v1",
+			Model:    "google/gemini-2.5-flash-preview",
+			Provider: "openrouter",
 		},
 		Prompts: PromptsConfig{
 			BaseSystem:    ``,
