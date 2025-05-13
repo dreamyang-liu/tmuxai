@@ -25,6 +25,7 @@ type AiClient struct {
 	config        *config.OpenRouterConfig
 	client        *http.Client
 	bedrockClient *bedrockruntime.Client
+	messageLength int
 }
 
 // Message represents a chat message
@@ -265,7 +266,7 @@ func (c *AiClient) formatBedrockConverseRequest(messages []Message, modelID stri
 		},
 		System: []types.SystemContentBlock{},
 	}
-
+	fmt.Printf("Lenght of messages: %d\n", len(messages))
 	for _, msg := range messages {
 		if msg.Role == "system" {
 			request.System = append(request.System, &types.SystemContentBlockMemberText{
@@ -302,6 +303,17 @@ func (c *AiClient) formatBedrockConverseRequest(messages []Message, modelID stri
 		},
 	})
 
+	// Add cache point for request.Messages every 5 new messages
+	if len(request.Messages)-c.messageLength > 5 {
+		request.Messages[len(request.Messages)-1].Content = append(request.Messages[len(request.Messages)-1].Content, &types.ContentBlockMemberCachePoint{
+			Value: types.CachePointBlock{
+				Type: types.CachePointTypeDefault,
+			},
+		},
+		)
+	}
+
+	c.messageLength = len(request.Messages)
 	return request, nil
 }
 
