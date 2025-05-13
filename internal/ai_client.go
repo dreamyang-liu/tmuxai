@@ -271,7 +271,7 @@ func (c *AiClient) formatBedrockConverseRequest(messages []Message, modelID stri
 			request.System = append(request.System, &types.SystemContentBlockMemberText{
 				Value: msg.Content,
 			})
-			fmt.Printf("System message added to request: %s\n", msg.Content)
+			// fmt.Printf("System message added to request: %s\n", msg.Content)
 		} else {
 			request.Messages = append(request.Messages, types.Message{
 				Role: getConversationRole(msg.Role),
@@ -282,6 +282,17 @@ func (c *AiClient) formatBedrockConverseRequest(messages []Message, modelID stri
 				},
 			})
 		}
+	}
+
+	// Read custom prompt from file and append it to the system prompt
+	customPromptPath := fmt.Sprintf("%s/.config/tmuxai/custom_prompt.txt", os.Getenv("HOME"))
+	customPrompt, err := os.ReadFile(customPromptPath)
+	if err == nil {
+		request.System = append(request.System, &types.SystemContentBlockMemberText{
+			Value: string(customPrompt),
+		})
+	} else {
+		logger.Debug("Failed to read custom prompt file: %v", err)
 	}
 
 	// Use system pompot cache
